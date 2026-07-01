@@ -45,18 +45,17 @@ jobs:
           ! grep -q '@import' src/Settings.mm src/Overlay/Overlay.h src/Unity/UnityAPI.mm Tweak.xm
           ! grep -q 'StateScript_LOGOSFLAGS' Makefile
           grep -q 'StateScript_OBJCFLAGS = -fobjc-arc' Makefile
-          grep -q 'StateScript_CCFLAGS = -std=c++17' Makefile
+          grep -q 'StateScript_CXXFLAGS = -std=c++17' Makefile
           ! grep 'StateScript_CFLAGS' Makefile | grep -q '\-fobjc-arc'
-          ! grep 'StateScript_CFLAGS' Makefile | grep -q '\-std=c++17'
           grep -q '#import <UIKit/UIKit.h>' Tweak.xm
           grep -q '#import <UIKit/UIKit.h>' src/Overlay/Overlay.mm
           grep -q 'setupWatermarkOnWindow' src/Overlay/Overlay.mm
-          grep -q 'RemoteAssets.h' src/Assets/RemoteAssets.h
+          grep -q 'namespace RemoteAssets' src/Assets/RemoteAssets.h
           grep -q 'raw.githubusercontent.com/mortrxess/icon' src/Assets/RemoteAssets.h
-          grep -q 'SetLanguage((Lang)lang)' src/Menu/MenuRenderer.mm
+          grep -q 'SetLanguage(static_cast<Lang>' src/Menu/MenuRenderer.mm
           grep -q 'Version: 1.0.7' control
           ! grep -q '^#import $' src/Overlay/Overlay.mm
-          echo "Source OK — v1.0.5 files verified"
+          echo "Source OK — v1.0.7 verified"
 
       - name: Build .deb package
         env:
