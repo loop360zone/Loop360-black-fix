@@ -7,7 +7,6 @@
 #include "../Features/PlayerScale.h"
 #include "../Features/Weapon.h"
 #include "../Features/Teleport.h"
-#include "../Assets/RemoteAssets.h"
 
 #import <UIKit/UIKit.h>
 #import <Metal/Metal.h>
@@ -17,7 +16,6 @@
 #include "imgui.h"
 #include "imgui_impl_metal.h"
 
-// Unity لا يعرض subviews على نافذته — نستخدم نافذة overlay منفصلة فوق اللعبة.
 @interface SSPassthroughView : UIView
 @end
 
@@ -79,13 +77,43 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
 }
 
 @interface StateScriptOverlayView : MTKView
+@property (nonatomic, assign) BOOL imguiCapturesInput;
+@property (nonatomic, assign) BOOL imguiContextReady;
 @end
 
 @implementation StateScriptOverlayView
+
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     if (!Settings::bShowMenu.load()) return nil;
+    if (!self.imguiCapturesInput) return nil;
     return [super hitTest:point withEvent:event];
 }
+
+- (void)feedTouch:(UITouch *)touch down:(BOOL)down {
+    if (!touch || !self.imguiContextReady) return;
+    ImGuiIO &io = ImGui::GetIO();
+    CGPoint loc = [touch locationInView:self];
+    CGFloat sf = self.contentScaleFactor > 0.f ? self.contentScaleFactor : 1.f;
+    io.AddMousePosEvent(loc.x * sf, loc.y * sf);
+    io.AddMouseButtonEvent(0, down);
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self feedTouch:touches.anyObject down:YES];
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self feedTouch:touches.anyObject down:YES];
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self feedTouch:touches.anyObject down:NO];
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self feedTouch:touches.anyObject down:NO];
+}
+
 @end
 
 @interface StateScriptOverlay () <MTKViewDelegate>
@@ -95,7 +123,6 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
 @property (nonatomic, strong) UIWindow *menuWindow;
 @property (nonatomic, strong) SSPassthroughView *controlsRootView;
 @property (nonatomic, strong) StateScriptOverlayView *mtkView;
-@property (nonatomic, strong) UIButton *toggleButton;
 @property (nonatomic, strong) UILabel *watermarkLabel;
 @property (nonatomic, strong) id<MTLDevice> device;
 @property (nonatomic, strong) id<MTLCommandQueue> commandQueue;
@@ -141,12 +168,11 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     if (!self.controlsWindow || self.controlsWindow.windowScene != scene) {
         self.controlsWindow = nil;
         self.controlsRootView = nil;
-        self.toggleButton = nil;
         self.watermarkLabel = nil;
 
         UIWindow *controls = [[UIWindow alloc] initWithWindowScene:scene];
         controls.frame = bounds;
-        controls.windowLevel = UIWindowLevelAlert + 250;
+        controls.windowLevel = UIWindowLevelAlert + 350;
         controls.backgroundColor = UIColor.clearColor;
         controls.opaque = NO;
         controls.userInteractionEnabled = YES;
@@ -168,7 +194,6 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
         self.controlsRootView.frame = bounds;
     }
 
-    [self setupToggleButtonOnControlsRoot:self.controlsRootView bounds:bounds];
     [self setupWatermarkOnControlsRoot:self.controlsRootView bounds:bounds];
     [self applyStreamerMode];
 
@@ -209,8 +234,11 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     mtk.backgroundColor = UIColor.clearColor;
     mtk.layer.opaque = NO;
     mtk.userInteractionEnabled = YES;
+    mtk.multipleTouchEnabled = NO;
     mtk.paused = YES;
     mtk.enableSetNeedsDisplay = NO;
+    mtk.imguiCapturesInput = NO;
+    mtk.imguiContextReady = NO;
 
     UIViewController *vc = [UIViewController new];
     vc.view = mtk;
@@ -233,54 +261,9 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
         [self ensureControlsWindowForScene:scene bounds:bounds];
         [self ensureMenuOverlayForScene:scene bounds:bounds];
 
-        if (self.toggleButton) {
-            [self.controlsRootView bringSubviewToFront:self.toggleButton];
-        }
         if (self.watermarkLabel) {
             [self.controlsRootView bringSubviewToFront:self.watermarkLabel];
         }
-    });
-}
-
-- (void)setupToggleButtonOnControlsRoot:(UIView *)root bounds:(CGRect)bounds {
-    if (!root) return;
-
-    if (self.toggleButton) {
-        if (self.toggleButton.superview != root) {
-            [root addSubview:self.toggleButton];
-        }
-        return;
-    }
-
-    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
-    btn.frame = CGRectMake(16, MAX(56.f, bounds.size.height * 0.08f), 64, 64);
-    btn.backgroundColor = [[UIColor colorWithRed:0.05f green:0.55f blue:0.20f alpha:1] colorWithAlphaComponent:0.96f];
-    btn.layer.cornerRadius = 32;
-    btn.layer.borderWidth = 3.f;
-    btn.layer.borderColor = [UIColor colorWithWhite:1.f alpha:0.95f].CGColor;
-    btn.clipsToBounds = YES;
-    btn.imageView.contentMode = UIViewContentModeScaleAspectFill;
-    btn.layer.shadowColor = UIColor.blackColor.CGColor;
-    btn.layer.shadowOpacity = 0.45f;
-    btn.layer.shadowRadius = 6.f;
-    btn.layer.shadowOffset = CGSizeMake(0, 2);
-    [btn setTitle:@"360" forState:UIControlStateNormal];
-    [btn setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont boldSystemFontOfSize:16];
-    [btn addTarget:self action:@selector(toggleMenu) forControlEvents:UIControlEventTouchUpInside];
-
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
-    [btn addGestureRecognizer:pan];
-
-    [root addSubview:btn];
-    self.toggleButton = btn;
-
-    __weak UIButton *weakBtn = btn;
-    RemoteAssets::LoadUIImageFromURL(RemoteAssets::kToggleIconURL, ^(UIImage *image) {
-        UIButton *b = weakBtn;
-        if (!b || !image) return;
-        [b setImage:image forState:UIControlStateNormal];
-        [b setTitle:nil forState:UIControlStateNormal];
     });
 }
 
@@ -295,13 +278,15 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
         return;
     }
 
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(10, bounds.size.height - 40, 220, 32)];
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(10, bounds.size.height - 44, 240, 36)];
     label.autoresizingMask = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleRightMargin;
     label.text = @"  Loop360  ";
     label.textColor = [UIColor colorWithRed:0.2f green:1.f blue:0.45f alpha:1.f];
-    label.font = [UIFont boldSystemFontOfSize:15];
-    label.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.55f];
-    label.layer.cornerRadius = 8.f;
+    label.font = [UIFont boldSystemFontOfSize:16];
+    label.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.62f];
+    label.layer.cornerRadius = 10.f;
+    label.layer.borderWidth = 1.5f;
+    label.layer.borderColor = [UIColor colorWithRed:0.2f green:0.85f blue:0.4f alpha:0.85f].CGColor;
     label.clipsToBounds = YES;
     label.textAlignment = NSTextAlignmentCenter;
     label.userInteractionEnabled = YES;
@@ -309,14 +294,15 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(toggleMenu)];
     [label addGestureRecognizer:tap];
 
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleWatermarkPan:)];
     [label addGestureRecognizer:pan];
 
     [root addSubview:label];
     self.watermarkLabel = label;
 }
 
-- (void)handlePan:(UIPanGestureRecognizer *)gesture {
+- (void)handleWatermarkPan:(UIPanGestureRecognizer *)gesture {
+    if (gesture.view != self.watermarkLabel) return;
     UIView *view = gesture.view;
     if (!view.superview) return;
     CGPoint t = [gesture translationInView:view.superview];
@@ -339,10 +325,16 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     if (self.mtkView) {
         self.mtkView.paused = !show;
         self.mtkView.userInteractionEnabled = show;
+        if (!show) {
+            self.mtkView.imguiCapturesInput = NO;
+        }
     }
 
     if (self.controlsWindow && !Settings::bStreamerMode.load()) {
         self.controlsWindow.hidden = NO;
+    }
+    if (self.watermarkLabel) {
+        [self.controlsRootView bringSubviewToFront:self.watermarkLabel];
     }
 }
 
@@ -350,9 +342,6 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     BOOL hide = Settings::bStreamerMode.load();
     if (self.controlsWindow) {
         self.controlsWindow.hidden = hide;
-    }
-    if (self.toggleButton) {
-        self.toggleButton.hidden = hide;
     }
     if (self.watermarkLabel) {
         self.watermarkLabel.hidden = hide;
@@ -368,6 +357,7 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     io.DisplaySize = ImVec2((float)self.mtkView.bounds.size.width, (float)self.mtkView.bounds.size.height);
     io.Fonts->AddFontDefault();
     ImGui_ImplMetal_Init(self.device);
+    self.mtkView.imguiContextReady = YES;
     self.imguiReady = YES;
 }
 
@@ -412,6 +402,10 @@ static CGRect SSBoundsForScene(UIWindowScene *scene) {
     MenuRenderer::RenderOverlay(w, h);
 
     ImGui::Render();
+
+    StateScriptOverlayView *overlayView = (StateScriptOverlayView *)view;
+    overlayView.imguiCapturesInput = ImGui::GetIO().WantCaptureMouse;
+
     id<MTLRenderCommandEncoder> enc = [cmd renderCommandEncoderWithDescriptor:pass];
     ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), cmd, enc);
     [enc endEncoding];
