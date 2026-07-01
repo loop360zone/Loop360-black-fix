@@ -53,12 +53,13 @@ jobs:
           grep -q 'namespace RemoteAssets' src/Assets/RemoteAssets.h
           grep -q 'raw.githubusercontent.com/mortrxess/icon' src/Assets/RemoteAssets.h
           grep -q 'SetLanguage(static_cast<Lang>' src/Menu/MenuRenderer.mm
-          grep -q 'Version: 1.0.8' control
-          grep -q 'controlsWindow' src/Overlay/Overlay.mm
-          grep -q 'SSPassthroughView' src/Overlay/Overlay.mm
+          grep -q 'Version: 1.0.9' control
+          grep -q 'imguiCapturesInput' src/Overlay/Overlay.mm
+          grep -q 'feedTouch' src/Overlay/Overlay.mm
+          ! grep -q 'setupToggleButton' src/Overlay/Overlay.mm
           grep -q 'didFinishLaunchingWithOptions' Tweak.xm
           ! grep -q '^#import $' src/Overlay/Overlay.mm
-          echo "Source OK — v1.0.8 verified"
+          echo "Source OK — v1.0.9 verified"
 
       - name: Build .deb package
         env:
