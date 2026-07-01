@@ -1,0 +1,29 @@
+=== StateScript — how to get the .deb file ===
+
+OPTION A — GitHub Actions (recommended from Windows)
+1. Create a new repo on GitHub (public or private)
+2. Push this folder:
+   git init
+   git add .
+   git commit -m "StateScript rebuild"
+   git branch -M main
+   git remote add origin https://github.com/YOUR_USER/statescript.git
+   git push -u origin main
+3. Open GitHub -> Actions -> "Build StateScript deb" -> Run workflow
+4. When finished: download artifact "StateScript-deb"
+5. Install on iPhone with Filza or: dpkg -i com.statescript.hack_1.0.4_iphoneos-arm.deb
+
+OPTION B — Mac with Theos
+   export THEOS=~/theos
+   git clone https://github.com/theos/theos.git $THEOS
+   cd statescript
+   bash scripts/setup_imgui.sh
+   make package
+   Output: packages/com.statescript.hack_1.0.4_iphoneos-arm.deb
+
+OPTION C — Windows packaging (after you have a compiled dylib)
+   Put arm64 StateScript.dylib in: dist/StateScript.dylib
+   Run: powershell -ExecutionPolicy Bypass -File scripts\package_deb.ps1
+   Output: packages/com.statescript.hack_1.0.4_iphoneos-arm.deb
+
+NOTE: Windows cannot compile arm64 iOS tweaks. The .deb must come from Mac or GitHub Actions.

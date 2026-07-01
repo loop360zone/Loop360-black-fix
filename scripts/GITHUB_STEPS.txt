@@ -1,0 +1,61 @@
+# ============================================================
+# StateScript — GitHub خطوة بخطوة (الناتج: ملف .deb)
+# ============================================================
+
+## قبل ما تبدأ
+- حساب GitHub (مجاني): https://github.com/signup
+- مجلد المشروع: statescript (على Desktop\dddd\statescript)
+
+## الخطوة 1 — ضغط المشروع
+على Windows شغّل:
+  powershell -ExecutionPolicy Bypass -File scripts\prepare_upload.ps1
+
+يطلع ملف:
+  statescript-upload.zip
+
+## الخطoة 2 — إنشاء Repository
+1. افتح https://github.com/new
+2. Repository name: statescript  (أو أي اسم)
+3. Public أو Private (الاثنين يشتغلون)
+4. لا تختر README / .gitignore
+5. Create repository
+
+## الخطوة 3 — رفع الملفات
+### طريقة A — GitHub Desktop (أسهل بدون أوامر)
+1. نزّل GitHub Desktop: https://desktop.github.com
+2. File → Add Local Repository → اختر مجلد statescript
+3. Publish repository
+4. Commit + Push
+
+### طريقة B — رفع ZIP يدوي
+1. فك statescript-upload.zip
+2. في repo الجديد: Add file → Upload files
+3. اسحب كل محتويات مجلد statescript (Makefile, src, .github, ...)
+4. Commit changes
+
+## الخطوة 4 — تشغيل البناء
+1. في repo: تبويب **Actions**
+2. اختر **Build StateScript deb**
+3. **Run workflow** → Run workflow
+4. انتظر 3–8 دقائق (علامة ✓ خضراء)
+
+## الخطوة 5 — تحميل ملف .deb
+1. افتح الـ run الأخضر
+2. قسم **Artifacts**
+3. حمّل **StateScript-deb**
+4. فك الـ zip — داخله:
+   com.statescript.hack_1.0.4_iphoneos-arm.deb
+
+## الخطوة 6 — التثبيت على الآيفون
+1. انقل الـ .deb للجوال
+2. ESign → وقّع OneState + احقن الـ deb الجديد
+   أو Filza (jailbreak): dpkg -i ...
+3. افتح OneState → زر SS — بدون Login
+
+## إذا فشل البناء
+- افتح Actions → run الأحمر → اقرأ الخطأ
+- انسخ رسالة الخطأ وأرسلها — نصلحها سوا
+
+## ملاحظة
+- GitHub Actions مجاني (~2000 دقيقة/شهر للحسابات المجانية)
+- كل ما تعدّل السورس وترفع → Actions يبني .deb جديد تلقائياً

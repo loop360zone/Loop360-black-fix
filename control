@@ -1,0 +1,9 @@
+Package: com.statescript.hack
+Name: StateScript
+Depends: mobilesubstrate, firmware (>= 14.0)
+Version: 1.0.7
+Architecture: iphoneos-arm
+Description: StateScript for OneState Roleplay — rebuilt from source
+Maintainer: StateScript
+Author: StateScript
+Section: Tweaks
