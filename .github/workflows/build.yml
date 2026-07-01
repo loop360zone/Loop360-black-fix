@@ -1,0 +1,89 @@
+name: Build StateScript deb
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: brew install ldid xz
+
+      - name: Setup Theos
+        env:
+          THEOS: ${{ github.workspace }}/theos
+        run: |
+          git clone --recursive --depth 1 https://github.com/theos/theos.git "$THEOS"
+
+      - name: Link iOS SDK from Xcode
+        env:
+          THEOS: ${{ github.workspace }}/theos
+        run: |
+          SDK_PATH="$(xcrun --sdk iphoneos --show-sdk-path)"
+          SDK_NAME="$(basename "$SDK_PATH")"
+          mkdir -p "$THEOS/sdks"
+          ln -sf "$SDK_PATH" "$THEOS/sdks/$SDK_NAME"
+          ln -sf "$SDK_PATH" "$THEOS/sdks/iPhoneOS16.5.sdk"
+          echo "SDK linked: $SDK_NAME"
+          ls -la "$THEOS/sdks/"
+
+      - name: Setup ImGui
+        run: bash scripts/setup_imgui.sh
+
+      - name: Verify source files (block corrupted uploads)
+        run: |
+          set -e
+          grep -q 'AtomicBool' src/Settings.mm
+          grep -q 'using AtomicBool' src/Settings.h
+          grep -q 'SSIncludes.h' src/Unity/UnityAPI.mm
+          ! grep -q 'SS_BOOL' src/Settings.mm
+          ! grep -q '@import' src/Settings.mm src/Overlay/Overlay.h src/Unity/UnityAPI.mm Tweak.xm
+          ! grep -q 'StateScript_LOGOSFLAGS' Makefile
+          grep -q 'StateScript_OBJCFLAGS = -fobjc-arc' Makefile
+          grep -q 'StateScript_CCFLAGS = -std=c++17' Makefile
+          ! grep 'StateScript_CFLAGS' Makefile | grep -q '\-fobjc-arc'
+          ! grep 'StateScript_CFLAGS' Makefile | grep -q '\-std=c++17'
+          grep -q '#import <UIKit/UIKit.h>' Tweak.xm
+          grep -q '#import <UIKit/UIKit.h>' src/Overlay/Overlay.mm
+          grep -q 'setupWatermarkOnWindow' src/Overlay/Overlay.mm
+          grep -q 'RemoteAssets.h' src/Assets/RemoteAssets.h
+          grep -q 'raw.githubusercontent.com/mortrxess/icon' src/Assets/RemoteAssets.h
+          grep -q 'SetLanguage((Lang)lang)' src/Menu/MenuRenderer.mm
+          grep -q 'Version: 1.0.7' control
+          ! grep -q '^#import $' src/Overlay/Overlay.mm
+          echo "Source OK — v1.0.5 files verified"
+
+      - name: Build .deb package
+        env:
+          THEOS: ${{ github.workspace }}/theos
+          GO_EASY_ON_ME: 1
+        run: |
+          set -o pipefail
+          make clean || true
+          make package FINALPACKAGE=1 DEBUG=0 2>&1 | tee build.log
+          echo "===== BUILD LOG ====="
+          cat build.log
+          ls -la packages/ || true
+          test -n "$(ls -1 packages/*.deb 2>/dev/null)" || exit 1
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: StateScript-deb
+          path: packages/*.deb
+          if-no-files-found: error
+          retention-days: 30
